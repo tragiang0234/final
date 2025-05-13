@@ -2,61 +2,88 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>BalanceBot PID Tuner</title>
+  <title>BalanceBot Controller</title>
 </head>
 <body>
-  <h1>BalanceBot PID Controller</h1>
+  <h1>BalanceBot BLE Controller</h1>
 
-  <label>Kp: <input type="number" id="kp" step="0.1" value="30.0"></label><br>
-  <label>Ki: <input type="number" id="ki" step="0.1" value="0.5"></label><br>
-  <label>Kd: <input type="number" id="kd" step="0.1" value="0.8"></label><br>
-  <label>Setpoint: <input type="number" id="setpoint" step="0.1" value="0"></label><br><br>
+  <h3>PID Settings</h3>
+  <label>KP: <input type="number" id="kp" value="60"></label><br>
+  <label>KI: <input type="number" id="ki" value="270"></label><br>
+  <label>KD: <input type="number" id="kd" value="2.2"></label><br>
+  <label>Setpoint: <input type="number" id="setpoint" value="3.8"></label><br>
+  <button onclick="sendPID()">Send PID</button>
 
-  <button onclick="sendCommand('P')">Update Kp</button>
-  <button onclick="sendCommand('I')">Update Ki</button>
-  <button onclick="sendCommand('D')">Update Kd</button>
-  <button onclick="sendCommand('S')">Update Setpoint</button>
+  <h3>Mode</h3>
+  <button onclick="sendMode(0)">Balancing Mode</button>
+  <button onclick="sendMode(1)">Control Mode</button>
+
+  <h3>Control</h3>
+  <button onclick="sendCommand('FWD')">Forward</button>
+  <button onclick="sendCommand('BWD')">Backward</button>
+  <button onclick="sendCommand('LEFT')">Left</button>
+  <button onclick="sendCommand('RIGHT')">Right</button>
+  <button onclick="sendCommand('STOP')">Stop</button>
+
   <br><br>
-  <button onclick="connect()">Connect to ESP32</button>
+  <button onclick="connect()">Connect to Robot</button>
+  <p id="status">Not connected</p>
+  <pre id="output"></pre>
 
   <script>
     let bleDevice;
     let bleCharacteristic;
-
-    const serviceUuid = "19b10000-e8f2-537e-4f6c-d104768a1214";
-    const charUuid = "19b10001-e8f2-537e-4f6c-d104768a1214";
+    const serviceUUID = '19b10000-e8f2-537e-4f6c-d104768a1214';
+    const charUUID = '19b10001-e8f2-537e-4f6c-d104768a1214';
 
     async function connect() {
       try {
         bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: "BalanceBot" }],
-          optionalServices: [serviceUuid]
+          filters: [{ name: "SelfBalancingRobot" }],
+          optionalServices: [serviceUUID]
         });
-
         const server = await bleDevice.gatt.connect();
-        const service = await server.getPrimaryService(serviceUuid);
-        bleCharacteristic = await service.getCharacteristic(charUuid);
-        alert("Connected to BalanceBot!");
+        const service = await server.getPrimaryService(serviceUUID);
+        bleCharacteristic = await service.getCharacteristic(charUUID);
+
+        document.getElementById("status").innerText = "Connected to SelfBalancingRobot";
+
+        bleCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
+        bleCharacteristic.startNotifications();
       } catch (error) {
-        alert("Connection failed: " + error);
+        alert("BLE Connection failed: " + error);
       }
     }
 
-    async function sendCommand(type) {
+    function sendPID() {
+      const kp = document.getElementById("kp").value;
+      const ki = document.getElementById("ki").value;
+      const kd = document.getElementById("kd").value;
+      const sp = document.getElementById("setpoint").value;
+      const cmd = `PID:${kp},${ki},${kd},${sp}`;
+      writeToESP(cmd);
+    }
+
+    function sendMode(mode) {
+      writeToESP(`MODE:${mode}`);
+    }
+
+    function sendCommand(cmd) {
+      writeToESP(`CMD:${cmd}`);
+    }
+
+    function writeToESP(data) {
       if (!bleCharacteristic) {
-        alert("Not connected!");
+        alert("Not connected to device.");
         return;
       }
+      const encoder = new TextEncoder();
+      bleCharacteristic.writeValue(encoder.encode(data));
+    }
 
-      let value;
-      if (type === 'P') value = document.getElementById("kp").value;
-      if (type === 'I') value = document.getElementById("ki").value;
-      if (type === 'D') value = document.getElementById("kd").value;
-      if (type === 'S') value = document.getElementById("setpoint").value;
-
-      const command = `${type}:${value}`;
-      console.log("Sending:", command);
-      await bleCharacteristic.writeValue(new TextEncoder().encode(command));
+    function handleNotification(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      document.getElementById("output").textContent = value;
     }
   </script>
 </body>
