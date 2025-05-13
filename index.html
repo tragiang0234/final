@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>BalanceBot PID Tuner</title>
+</head>
+<body>
+  <h1>BalanceBot PID Controller</h1>
+
+  <label>Kp: <input type="number" id="kp" step="0.1" value="30.0"></label><br>
+  <label>Ki: <input type="number" id="ki" step="0.1" value="0.5"></label><br>
+  <label>Kd: <input type="number" id="kd" step="0.1" value="0.8"></label><br>
+  <label>Setpoint: <input type="number" id="setpoint" step="0.1" value="0"></label><br><br>
+
+  <button onclick="sendCommand('P')">Update Kp</button>
+  <button onclick="sendCommand('I')">Update Ki</button>
+  <button onclick="sendCommand('D')">Update Kd</button>
+  <button onclick="sendCommand('S')">Update Setpoint</button>
+  <br><br>
+  <button onclick="connect()">Connect to ESP32</button>
+
+  <script>
+    let bleDevice;
+    let bleCharacteristic;
+
+    const serviceUuid = "19b10000-e8f2-537e-4f6c-d104768a1214";
+    const charUuid = "19b10001-e8f2-537e-4f6c-d104768a1214";
+
+    async function connect() {
+      try {
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "BalanceBot" }],
+          optionalServices: [serviceUuid]
+        });
+
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService(serviceUuid);
+        bleCharacteristic = await service.getCharacteristic(charUuid);
+        alert("Connected to BalanceBot!");
+      } catch (error) {
+        alert("Connection failed: " + error);
+      }
+    }
+
+    async function sendCommand(type) {
+      if (!bleCharacteristic) {
+        alert("Not connected!");
+        return;
+      }
+
+      let value;
+      if (type === 'P') value = document.getElementById("kp").value;
+      if (type === 'I') value = document.getElementById("ki").value;
+      if (type === 'D') value = document.getElementById("kd").value;
+      if (type === 'S') value = document.getElementById("setpoint").value;
+
+      const command = `${type}:${value}`;
+      console.log("Sending:", command);
+      await bleCharacteristic.writeValue(new TextEncoder().encode(command));
+    }
+  </script>
+</body>
+</html>
