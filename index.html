@@ -2,88 +2,52 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>BalanceBot Controller</title>
+  <title>BLE PID Controller</title>
 </head>
 <body>
-  <h1>BalanceBot BLE Controller</h1>
+  <h1>BLE PID Sender (V1)</h1>
+  
+  <label>Kp: <input type="number" id="kp" value="60"></label><br>
+  <label>Ki: <input type="number" id="ki" value="270"></label><br>
+  <label>Kd: <input type="number" id="kd" value="2.2"></label><br>
+  <button onclick="sendPID()">Send PID</button><br><br>
 
-  <h3>PID Settings</h3>
-  <label>KP: <input type="number" id="kp" value="60"></label><br>
-  <label>KI: <input type="number" id="ki" value="270"></label><br>
-  <label>KD: <input type="number" id="kd" value="2.2"></label><br>
-  <label>Setpoint: <input type="number" id="setpoint" value="3.8"></label><br>
-  <button onclick="sendPID()">Send PID</button>
+  <button onclick="connectBLE()">Connect to Robot</button>
 
-  <h3>Mode</h3>
-  <button onclick="sendMode(0)">Balancing Mode</button>
-  <button onclick="sendMode(1)">Control Mode</button>
-
-  <h3>Control</h3>
-  <button onclick="sendCommand('FWD')">Forward</button>
-  <button onclick="sendCommand('BWD')">Backward</button>
-  <button onclick="sendCommand('LEFT')">Left</button>
-  <button onclick="sendCommand('RIGHT')">Right</button>
-  <button onclick="sendCommand('STOP')">Stop</button>
-
-  <br><br>
-  <button onclick="connect()">Connect to Robot</button>
-  <p id="status">Not connected</p>
-  <pre id="output"></pre>
+  <h3>Status: <span id="status">Disconnected</span></h3>
 
   <script>
-    let bleDevice;
-    let bleCharacteristic;
+    let device, characteristic;
     const serviceUUID = '19b10000-e8f2-537e-4f6c-d104768a1214';
     const charUUID = '19b10001-e8f2-537e-4f6c-d104768a1214';
 
-    async function connect() {
+    async function connectBLE() {
       try {
-        bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: "SelfBalancingRobot" }],
-          optionalServices: [serviceUUID]
+        device = await navigator.bluetooth.requestDevice({
+          filters: [{ services: [serviceUUID] }]
         });
-        const server = await bleDevice.gatt.connect();
+        const server = await device.gatt.connect();
         const service = await server.getPrimaryService(serviceUUID);
-        bleCharacteristic = await service.getCharacteristic(charUUID);
-
-        document.getElementById("status").innerText = "Connected to SelfBalancingRobot";
-
-        bleCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
-        bleCharacteristic.startNotifications();
+        characteristic = await service.getCharacteristic(charUUID);
+        document.getElementById('status').innerText = 'Connected';
+        console.log('Connected to robot');
       } catch (error) {
-        alert("BLE Connection failed: " + error);
+        console.error(error);
+        document.getElementById('status').innerText = 'Connection failed';
       }
     }
 
     function sendPID() {
+      if (!characteristic) {
+        alert("Not connected!");
+        return;
+      }
       const kp = document.getElementById("kp").value;
       const ki = document.getElementById("ki").value;
       const kd = document.getElementById("kd").value;
-      const sp = document.getElementById("setpoint").value;
-      const cmd = `PID:${kp},${ki},${kd},${sp}`;
-      writeToESP(cmd);
-    }
-
-    function sendMode(mode) {
-      writeToESP(`MODE:${mode}`);
-    }
-
-    function sendCommand(cmd) {
-      writeToESP(`CMD:${cmd}`);
-    }
-
-    function writeToESP(data) {
-      if (!bleCharacteristic) {
-        alert("Not connected to device.");
-        return;
-      }
-      const encoder = new TextEncoder();
-      bleCharacteristic.writeValue(encoder.encode(data));
-    }
-
-    function handleNotification(event) {
-      const value = new TextDecoder().decode(event.target.value);
-      document.getElementById("output").textContent = value;
+      const data = `${kp},${ki},${kd}`;
+      characteristic.writeValue(new TextEncoder().encode(data));
+      console.log("Sent PID:", data);
     }
   </script>
 </body>
