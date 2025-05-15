@@ -2,80 +2,69 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>PID Tuning - Self-Balancing Robot</title>
+  <title>PID Tuner - Self-Balancing Robot</title>
 </head>
 <body>
-  <h1>Self-Balancing Robot: PID Control</h1>
+  <h2>Web Bluetooth PID Tuning</h2>
 
-  <label>Kp: <input type="number" id="kp" step="0.1" value="60.0"></label><br>
-  <label>Ki: <input type="number" id="ki" step="0.1" value="270.0"></label><br>
-  <label>Kd: <input type="number" id="kd" step="0.1" value="2.2"></label><br><br>
+  <label for="kp">Kp:</label>
+  <input type="number" id="kp" value="45" step="0.1">
+  <br>
+  <label for="ki">Ki:</label>
+  <input type="number" id="ki" value="0.6" step="0.1">
+  <br>
+  <label for="kd">Kd:</label>
+  <input type="number" id="kd" value="2.0" step="0.1">
+  <br>
+  <label for="offset">Offset Angle:</label>
+  <input type="number" id="offset" value="0" step="0.1">
+  <br><br>
 
-  <button onclick="connect()">🔌 Connect to ESP32</button>
-  <button onclick="sendPID()">📤 Send PID</button>
-  <button onclick="sendReset()">🧹 Reset PID</button>
+  <button onclick="connectBLE()">Connect to ESP32</button>
+  <button onclick="sendPID()">Send PID</button>
 
-  <h2>Live Data</h2>
-  <pre id="data">No data yet...</pre>
+  <h3>Live Data</h3>
+  <pre id="output">(Not connected)</pre>
 
   <script>
     let bleServer;
-    let bleService;
-    let bleCharacteristic;
+    let pidChar;
 
-    // ⚠️ Đổi thành UUID của bạn nếu đã cập nhật
-    const SERVICE_UUID = "91bad492-b950-4226-aa2b-4ede9fa42f59";
-    const CHARACTERISTIC_UUID = "cba1d466-344c-4be3-ab3f-189f80dd7518";
+    const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
+    const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
 
-    async function connect() {
+    async function connectBLE() {
       try {
         const device = await navigator.bluetooth.requestDevice({
-          filters: [{ name: 'SelfBalancingRobot' }],
+          filters: [{ namePrefix: 'SelfBalancingRobot' }],
           optionalServices: [SERVICE_UUID]
         });
-
         bleServer = await device.gatt.connect();
-        bleService = await bleServer.getPrimaryService(SERVICE_UUID);
-        bleCharacteristic = await bleService.getCharacteristic(CHARACTERISTIC_UUID);
+        const service = await bleServer.getPrimaryService(SERVICE_UUID);
+        pidChar = await service.getCharacteristic(CHARACTERISTIC_UUID);
 
-        await bleCharacteristic.startNotifications();
-        bleCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
-
-        document.getElementById("data").textContent = "✅ Connected. Waiting for data...";
-      } catch (error) {
-        console.error(error);
-        alert("❌ Connection failed: " + error);
+        // Enable notifications
+        pidChar.addEventListener('characteristicvaluechanged', handleNotifications);
+        await pidChar.startNotifications();
+        document.getElementById("output").textContent = "Connected! Waiting for data...";
+      } catch (err) {
+        console.error(err);
       }
     }
 
-    function sendPID() {
-      if (!bleCharacteristic) {
-        alert("Not connected yet!");
-        return;
-      }
-
-      const kp = document.getElementById("kp").value;
-      const ki = document.getElementById("ki").value;
-      const kd = document.getElementById("kd").value;
-
-      const data = `${kp},${ki},${kd}`;
-      const encoder = new TextEncoder();
-      bleCharacteristic.writeValue(encoder.encode(data));
+    function handleNotifications(event) {
+      const value = new TextDecoder().decode(event.target.value);
+      document.getElementById("output").textContent = value;
     }
 
-    function sendReset() {
-      if (!bleCharacteristic) {
-        alert("Not connected yet!");
-        return;
-      }
-      const encoder = new TextEncoder();
-      bleCharacteristic.writeValue(encoder.encode("RESET_PID"));
-    }
-
-    function handleNotification(event) {
-      const decoder = new TextDecoder();
-      const value = decoder.decode(event.target.value);
-      document.getElementById("data").textContent = value;
+    async function sendPID() {
+      if (!pidChar) return;
+      const kp = parseFloat(document.getElementById("kp").value);
+      const ki = parseFloat(document.getElementById("ki").value);
+      const kd = parseFloat(document.getElementById("kd").value);
+      const offset = parseFloat(document.getElementById("offset").value);
+      const data = `${kp},${ki},${kd},${offset}`;
+      await pidChar.writeValue(new TextEncoder().encode(data));
     }
   </script>
 </body>
