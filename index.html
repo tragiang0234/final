@@ -2,68 +2,75 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>ESP32 Self-Balancing Robot BLE</title>
+  <title>PID Tuning - Self-Balancing Robot</title>
 </head>
 <body>
-  <h1>🔧 PID Control Panel</h1>
+  <h1>Web Bluetooth PID Control</h1>
 
-  <button onclick="connectBLE()">🔌 Connect to Robot</button>
+  <label>Kp: <input type="number" id="kp" step="0.1" value="60.0"></label><br>
+  <label>Ki: <input type="number" id="ki" step="0.1" value="270.0"></label><br>
+  <label>Kd: <input type="number" id="kd" step="0.1" value="2.2"></label><br>
+  <button onclick="sendPID()">Send PID</button>
+  <button onclick="connect()">Connect to ESP32</button>
 
-  <h3>Set PID Values</h3>
-  <label>Kp: <input type="number" id="kp" value="60" step="0.1"></label><br>
-  <label>Ki: <input type="number" id="ki" value="270" step="0.1"></label><br>
-  <label>Kd: <input type="number" id="kd" value="2.2" step="0.1"></label><br>
-  <button onclick="sendPID()">📤 Send PID</button>
-
-  <h3>📡 Live Data from ESP32</h3>
-  <pre id="output">Waiting for data...</pre>
+  <h2>Live Data:</h2>
+  <pre id="data">No data yet...</pre>
 
   <script>
-    let device, server;
-    let writeChar, notifyChar;
+    let bleServer;
+    let bleService;
+    let bleCharacteristic;
 
-    const SERVICE_UUID       = "6e400001-b5a3-f393-e0a9-e50e24dcca9e";
-    const WRITE_UUID         = "6e400002-b5a3-f393-e0a9-e50e24dcca9e";
-    const NOTIFY_UUID        = "6e400003-b5a3-f393-e0a9-e50e24dcca9e";
+    const SERVICE_UUID = "91bad492-b950-4226-aa2b-4ede9fa42f59";
+    const CHARACTERISTIC_UUID = "cba1d466-344c-4be3-ab3f-189f80dd7518";
 
-    async function connectBLE() {
+
+    async function connect() {
       try {
-        device = await navigator.bluetooth.requestDevice({
-          filters: [{ services: [SERVICE_UUID] }]
+        const device = await navigator.bluetooth.requestDevice({
+          filters: [{ name: 'SelfBalancingRobot' }],
+          optionalServices: [SERVICE_UUID]
         });
-        server = await device.gatt.connect();
 
-        const service = await server.getPrimaryService(SERVICE_UUID);
-        writeChar = await service.getCharacteristic(WRITE_UUID);
-        notifyChar = await service.getCharacteristic(NOTIFY_UUID);
+        bleServer = await device.gatt.connect();
+        bleService = await bleServer.getPrimaryService(SERVICE_UUID);
+        bleCharacteristic = await bleService.getCharacteristic(CHARACTERISTIC_UUID);
 
-        await notifyChar.startNotifications();
-        notifyChar.addEventListener("characteristicvaluechanged", handleNotification);
+        // Enable notifications
+        await bleCharacteristic.startNotifications();
+        bleCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
 
-        document.getElementById("output").textContent = "✅ Connected to ESP32. Waiting for data...";
+        document.getElementById("data").textContent = "Connected and waiting for data...";
       } catch (error) {
         console.error(error);
-        alert("Failed to connect: " + error);
+        alert("Connection failed: " + error);
       }
     }
 
     function sendPID() {
-      if (!writeChar) {
-        alert("❌ Not connected to ESP32 yet!");
+      if (!bleCharacteristic) {
+        alert("Not connected yet!");
         return;
       }
+
       const kp = document.getElementById("kp").value;
       const ki = document.getElementById("ki").value;
       const kd = document.getElementById("kd").value;
+
       const data = `${kp},${ki},${kd}`;
       const encoder = new TextEncoder();
-      writeChar.writeValue(encoder.encode(data));
+      bleCharacteristic.writeValue(encoder.encode(data));
     }
 
     function handleNotification(event) {
       const decoder = new TextDecoder();
       const value = decoder.decode(event.target.value);
-      document.getElementById("output").textContent = value;
+      document.getElementById("data").textContent = value;
+
+      // Optional: Parse and show values nicely
+      // const [kp, ki, kd, ax, ay, az, gx, gy, gz, angle, speed] = value.split(',');
+      // document.getElementById("data").textContent =
+      //   `Angle: ${angle}°\nSpeed: ${speed}\nAccel: [${ax}, ${ay}, ${az}]\nGyro: [${gx}, ${gy}, ${gz}]`;
     }
   </script>
 </body>
