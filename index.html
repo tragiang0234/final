@@ -1,36 +1,55 @@
 <!DOCTYPE html>
 <html>
-<head><meta charset="utf-8"><title>PID Control</title></head>
+<head>
+  <meta charset="utf-8">
+  <title>PID Tuning for Balancing Robot</title>
+</head>
 <body>
-  <h2>PID Tuning for Self-Balancing Robot</h2>
-  <p>
-    Kp: <input id="kp" type="number" value="60" step="0.1"><br>
-    Ki: <input id="ki" type="number" value="0.8" step="0.01"><br>
-    Kd: <input id="kd" type="number" value="5" step="0.1"><br>
-    Desired Angle: <input id="angle" type="number" value="0" step="0.1"><br>
-    <button onclick="connect()">Connect & Send</button>
-  </p>
+  <h2>Connect & Tune PID</h2>
+
+  <button onclick="connectBLE()">🔗 Connect</button><br><br>
+
+  <label>Kp: <input type="number" id="kp" step="0.1" value="60.0"></label><br>
+  <label>Ki: <input type="number" id="ki" step="0.01" value="0.8"></label><br>
+  <label>Kd: <input type="number" id="kd" step="0.1" value="5.0"></label><br>
+  <label>Desired Angle: <input type="number" id="angle" step="0.1" value="0"></label><br><br>
+
+  <button onclick="sendParams()">📤 Send Parameters</button>
 
   <script>
-    let device, characteristic;
-    async function connect() {
-      device = await navigator.bluetooth.requestDevice({
-        filters: [{ name: 'ESP32-BalanceBot' }],
-        optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
-      });
+    let bleDevice;
+    let bleCharacteristic;
 
-      const server = await device.gatt.connect();
-      const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
-      characteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
+    async function connectBLE() {
+      try {
+        bleDevice = await navigator.bluetooth.requestDevice({
+          filters: [{ name: "ESP32-Balance" }],
+          optionalServices: ["6e400001-b5a3-f393-e0a9-e50e24dcca9e"]
+        });
 
+        const server = await bleDevice.gatt.connect();
+        const service = await server.getPrimaryService("6e400001-b5a3-f393-e0a9-e50e24dcca9e");
+        bleCharacteristic = await service.getCharacteristic("6e400002-b5a3-f393-e0a9-e50e24dcca9e");
+        alert("✅ Connected to ESP32");
+      } catch (error) {
+        alert("❌ Connection failed: " + error);
+      }
+    }
+
+    async function sendParams() {
+      if (!bleCharacteristic) {
+        alert("⚠️ Not connected");
+        return;
+      }
       let kp = document.getElementById("kp").value;
       let ki = document.getElementById("ki").value;
       let kd = document.getElementById("kd").value;
       let angle = document.getElementById("angle").value;
-      let message = `${kp},${ki},${kd},${angle}`;
+
+      let msg = `${kp},${ki},${kd},${angle}`;
       const encoder = new TextEncoder();
-      await characteristic.writeValue(encoder.encode(message));
-      alert("Parameters sent!");
+      await bleCharacteristic.writeValue(encoder.encode(msg));
+      alert("✅ Parameters sent");
     }
   </script>
 </body>
