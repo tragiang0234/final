@@ -5,15 +5,17 @@
   <title>PID Tuning - Self-Balancing Robot</title>
 </head>
 <body>
-  <h1>Web Bluetooth PID Control</h1>
+  <h1>Self-Balancing Robot: PID Control</h1>
 
   <label>Kp: <input type="number" id="kp" step="0.1" value="60.0"></label><br>
   <label>Ki: <input type="number" id="ki" step="0.1" value="270.0"></label><br>
-  <label>Kd: <input type="number" id="kd" step="0.1" value="2.2"></label><br>
-  <button onclick="sendPID()">Send PID</button>
-  <button onclick="connect()">Connect to ESP32</button>
+  <label>Kd: <input type="number" id="kd" step="0.1" value="2.2"></label><br><br>
 
-  <h2>Live Data:</h2>
+  <button onclick="connect()">🔌 Connect to ESP32</button>
+  <button onclick="sendPID()">📤 Send PID</button>
+  <button onclick="sendReset()">🧹 Reset PID</button>
+
+  <h2>Live Data</h2>
   <pre id="data">No data yet...</pre>
 
   <script>
@@ -21,9 +23,9 @@
     let bleService;
     let bleCharacteristic;
 
+    // ⚠️ Đổi thành UUID của bạn nếu đã cập nhật
     const SERVICE_UUID = "91bad492-b950-4226-aa2b-4ede9fa42f59";
     const CHARACTERISTIC_UUID = "cba1d466-344c-4be3-ab3f-189f80dd7518";
-
 
     async function connect() {
       try {
@@ -36,14 +38,13 @@
         bleService = await bleServer.getPrimaryService(SERVICE_UUID);
         bleCharacteristic = await bleService.getCharacteristic(CHARACTERISTIC_UUID);
 
-        // Enable notifications
         await bleCharacteristic.startNotifications();
         bleCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
 
-        document.getElementById("data").textContent = "Connected and waiting for data...";
+        document.getElementById("data").textContent = "✅ Connected. Waiting for data...";
       } catch (error) {
         console.error(error);
-        alert("Connection failed: " + error);
+        alert("❌ Connection failed: " + error);
       }
     }
 
@@ -62,15 +63,19 @@
       bleCharacteristic.writeValue(encoder.encode(data));
     }
 
+    function sendReset() {
+      if (!bleCharacteristic) {
+        alert("Not connected yet!");
+        return;
+      }
+      const encoder = new TextEncoder();
+      bleCharacteristic.writeValue(encoder.encode("RESET_PID"));
+    }
+
     function handleNotification(event) {
       const decoder = new TextDecoder();
       const value = decoder.decode(event.target.value);
       document.getElementById("data").textContent = value;
-
-      // Optional: Parse and show values nicely
-      // const [kp, ki, kd, ax, ay, az, gx, gy, gz, angle, speed] = value.split(',');
-      // document.getElementById("data").textContent =
-      //   `Angle: ${angle}°\nSpeed: ${speed}\nAccel: [${ax}, ${ay}, ${az}]\nGyro: [${gx}, ${gy}, ${gz}]`;
     }
   </script>
 </body>
