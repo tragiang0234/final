@@ -2,52 +2,65 @@
 <html>
 <head>
   <meta charset="utf-8">
-  <title>BLE PID Controller</title>
+  <title>ESP32 Self-Balancing Robot</title>
 </head>
 <body>
-  <h1>BLE PID Sender (V1)</h1>
-  
-  <label>Kp: <input type="number" id="kp" value="60"></label><br>
-  <label>Ki: <input type="number" id="ki" value="270"></label><br>
-  <label>Kd: <input type="number" id="kd" value="2.2"></label><br>
-  <button onclick="sendPID()">Send PID</button><br><br>
+  <h1>BLE Control Panel</h1>
 
-  <button onclick="connectBLE()">Connect to Robot</button>
+  <button onclick="connectBLE()">🔌 Connect BLE</button>
 
-  <h3>Status: <span id="status">Disconnected</span></h3>
+  <h3>Set PID Values</h3>
+  <label>Kp: <input type="number" id="kp" value="60" step="0.1"></label><br>
+  <label>Ki: <input type="number" id="ki" value="270" step="0.1"></label><br>
+  <label>Kd: <input type="number" id="kd" value="2.2" step="0.1"></label><br>
+  <button onclick="sendPID()">📤 Send PID</button>
+
+  <h3>Live Sensor Data</h3>
+  <pre id="output">No data yet</pre>
 
   <script>
-    let device, characteristic;
-    const serviceUUID = '19b10000-e8f2-537e-4f6c-d104768a1214';
-    const charUUID = '19b10001-e8f2-537e-4f6c-d104768a1214';
+    let bleDevice;
+    let bleServer;
+    let writeCharacteristic;
+    let notifyCharacteristic;
+
+    const serviceUUID = "19b10000-e8f2-537e-4f6c-d104768a1214";
+    const charUUID = "19b10001-e8f2-537e-4f6c-d104768a1214";
 
     async function connectBLE() {
       try {
-        device = await navigator.bluetooth.requestDevice({
+        bleDevice = await navigator.bluetooth.requestDevice({
           filters: [{ services: [serviceUUID] }]
         });
-        const server = await device.gatt.connect();
-        const service = await server.getPrimaryService(serviceUUID);
-        characteristic = await service.getCharacteristic(charUUID);
-        document.getElementById('status').innerText = 'Connected';
-        console.log('Connected to robot');
+        bleServer = await bleDevice.gatt.connect();
+        const service = await bleServer.getPrimaryService(serviceUUID);
+        writeCharacteristic = await service.getCharacteristic(charUUID);
+        notifyCharacteristic = await service.getCharacteristic(charUUID);
+
+        await notifyCharacteristic.startNotifications();
+        notifyCharacteristic.addEventListener('characteristicvaluechanged', handleNotification);
+
+        document.getElementById("output").textContent = "✅ Connected to ESP32";
       } catch (error) {
         console.error(error);
-        document.getElementById('status').innerText = 'Connection failed';
+        alert("Failed to connect: " + error);
       }
     }
 
     function sendPID() {
-      if (!characteristic) {
-        alert("Not connected!");
-        return;
-      }
+      if (!writeCharacteristic) return;
       const kp = document.getElementById("kp").value;
       const ki = document.getElementById("ki").value;
       const kd = document.getElementById("kd").value;
-      const data = `${kp},${ki},${kd}`;
-      characteristic.writeValue(new TextEncoder().encode(data));
-      console.log("Sent PID:", data);
+      const pidString = `${kp},${ki},${kd}`;
+      const encoder = new TextEncoder();
+      writeCharacteristic.writeValue(encoder.encode(pidString));
+    }
+
+    function handleNotification(event) {
+      const decoder = new TextDecoder();
+      const data = decoder.decode(event.target.value);
+      document.getElementById("output").textContent = data;
     }
   </script>
 </body>
