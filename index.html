@@ -1,70 +1,36 @@
 <!DOCTYPE html>
 <html>
-<head>
-  <meta charset="utf-8">
-  <title>PID Tuner - Self-Balancing Robot</title>
-</head>
+<head><meta charset="utf-8"><title>PID Control</title></head>
 <body>
-  <h2>Web Bluetooth PID Tuning</h2>
-
-  <label for="kp">Kp:</label>
-  <input type="number" id="kp" value="45" step="0.1">
-  <br>
-  <label for="ki">Ki:</label>
-  <input type="number" id="ki" value="0.6" step="0.1">
-  <br>
-  <label for="kd">Kd:</label>
-  <input type="number" id="kd" value="2.0" step="0.1">
-  <br>
-  <label for="offset">Offset Angle:</label>
-  <input type="number" id="offset" value="0" step="0.1">
-  <br><br>
-
-  <button onclick="connectBLE()">Connect to ESP32</button>
-  <button onclick="sendPID()">Send PID</button>
-
-  <h3>Live Data</h3>
-  <pre id="output">(Not connected)</pre>
+  <h2>PID Tuning for Self-Balancing Robot</h2>
+  <p>
+    Kp: <input id="kp" type="number" value="60" step="0.1"><br>
+    Ki: <input id="ki" type="number" value="0.8" step="0.01"><br>
+    Kd: <input id="kd" type="number" value="5" step="0.1"><br>
+    Desired Angle: <input id="angle" type="number" value="0" step="0.1"><br>
+    <button onclick="connect()">Connect & Send</button>
+  </p>
 
   <script>
-    let bleServer;
-    let pidChar;
+    let device, characteristic;
+    async function connect() {
+      device = await navigator.bluetooth.requestDevice({
+        filters: [{ name: 'ESP32-BalanceBot' }],
+        optionalServices: ['6e400001-b5a3-f393-e0a9-e50e24dcca9e']
+      });
 
-    const SERVICE_UUID = '4fafc201-1fb5-459e-8fcc-c5c9c331914b';
-    const CHARACTERISTIC_UUID = 'beb5483e-36e1-4688-b7f5-ea07361b26a8';
+      const server = await device.gatt.connect();
+      const service = await server.getPrimaryService('6e400001-b5a3-f393-e0a9-e50e24dcca9e');
+      characteristic = await service.getCharacteristic('6e400002-b5a3-f393-e0a9-e50e24dcca9e');
 
-    async function connectBLE() {
-      try {
-        const device = await navigator.bluetooth.requestDevice({
-          filters: [{ namePrefix: 'SelfBalancingRobot' }],
-          optionalServices: [SERVICE_UUID]
-        });
-        bleServer = await device.gatt.connect();
-        const service = await bleServer.getPrimaryService(SERVICE_UUID);
-        pidChar = await service.getCharacteristic(CHARACTERISTIC_UUID);
-
-        // Enable notifications
-        pidChar.addEventListener('characteristicvaluechanged', handleNotifications);
-        await pidChar.startNotifications();
-        document.getElementById("output").textContent = "Connected! Waiting for data...";
-      } catch (err) {
-        console.error(err);
-      }
-    }
-
-    function handleNotifications(event) {
-      const value = new TextDecoder().decode(event.target.value);
-      document.getElementById("output").textContent = value;
-    }
-
-    async function sendPID() {
-      if (!pidChar) return;
-      const kp = parseFloat(document.getElementById("kp").value);
-      const ki = parseFloat(document.getElementById("ki").value);
-      const kd = parseFloat(document.getElementById("kd").value);
-      const offset = parseFloat(document.getElementById("offset").value);
-      const data = `${kp},${ki},${kd},${offset}`;
-      await pidChar.writeValue(new TextEncoder().encode(data));
+      let kp = document.getElementById("kp").value;
+      let ki = document.getElementById("ki").value;
+      let kd = document.getElementById("kd").value;
+      let angle = document.getElementById("angle").value;
+      let message = `${kp},${ki},${kd},${angle}`;
+      const encoder = new TextEncoder();
+      await characteristic.writeValue(encoder.encode(message));
+      alert("Parameters sent!");
     }
   </script>
 </body>
