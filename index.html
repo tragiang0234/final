@@ -26,7 +26,7 @@
     async function connectBLE() {
       try {
         bleDevice = await navigator.bluetooth.requestDevice({
-          filters: [{ name: "ESP32-Balance" }],
+          filters: [{ name: "02032004" }],
           optionalServices: [SERVICE_UUID]
         });
 
